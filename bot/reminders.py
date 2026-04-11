@@ -81,7 +81,7 @@ class RemindersCog(commands.Cog):
                     continue
                 message = await ch.fetch_message(run.message_id)
                 embed = build_run_embed(run, self.config)
-                embed.title = f"✅ Run completed — {embed.title}"
+                embed.color = 0x808080
                 embed.set_field_at(
                     1,
                     name="Started",
