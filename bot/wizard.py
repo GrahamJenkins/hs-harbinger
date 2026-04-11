@@ -299,7 +299,7 @@ class WizardCog(commands.Cog):
             minutes: int = state["minutes"]
 
             # --- Summary step ---
-            start_time = time.time() + minutes * 60
+            preview_time = time.time() + minutes * 60
 
             summary_future: asyncio.Future[tuple[discord.Interaction, str]] = (
                 interaction.client.loop.create_future()
@@ -313,7 +313,7 @@ class WizardCog(commands.Cog):
                 if not _fut.done():
                     _fut.set_result((btn_interaction, action))
 
-            embed = build_summary_embed(level, dark, start_time, config)
+            embed = build_summary_embed(level, dark, minutes, preview_time, config)
             view = WizardSummaryView(summary_callback)
             await interaction.edit_original_response(
                 content="Here's your run summary:",
@@ -324,6 +324,7 @@ class WizardCog(commands.Cog):
             btn_interaction, action = await asyncio.wait_for(summary_future, timeout=120)
 
             if action == "confirm":
+                start_time = time.time() + minutes * 60
                 await btn_interaction.response.defer()
                 await self._create_run(interaction, btn_interaction, level, dark, minutes, start_time)
                 self._wizards.pop(user_id, None)

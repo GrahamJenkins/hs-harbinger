@@ -66,7 +66,7 @@ def build_run_embed(run: Run, config: Config) -> discord.Embed:
 
 
 def build_summary_embed(
-    level: int, dark: bool, start_time: float, config: Config
+    level: int, dark: bool, minutes: int, start_time: float, config: Config
 ) -> discord.Embed:
     if dark:
         title = f"💀 Dark Red Star {level} — Preview"
@@ -80,7 +80,7 @@ def build_summary_embed(
     embed.add_field(name="Type", value="Dark" if dark else "Normal", inline=True)
     embed.add_field(
         name="Starts",
-        value=f"<t:{int(start_time)}:R>",
+        value="Now" if minutes == 0 else f"<t:{int(start_time)}:R>",
         inline=False,
     )
     return embed
