@@ -372,16 +372,10 @@ class WizardCog(commands.Cog):
         embed = build_run_embed(run, config)
         run_view = RunView(self.run_store, config, run.id)
 
-        ping_parts = []
         guild = interaction.guild
-        for lvl in range(level, config.max_level + 1):
-            role_name = f"{config.role_prefix}{lvl}"
-            role = discord.utils.get(guild.roles, name=role_name)
-            if role is not None:
-                ping_parts.append(role.mention)
-
-        ping_text = " ".join(ping_parts)
-        content = ping_text if ping_text else None
+        role_name = f"{config.role_prefix}{level}"
+        role = discord.utils.get(guild.roles, name=role_name)
+        content = role.mention if role else None
 
         channel = interaction.channel
         message = await channel.send(content=content, embed=embed, view=run_view)
