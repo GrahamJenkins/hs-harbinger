@@ -3,6 +3,7 @@ min = 6
 max = 12
 dark_min = 7
 max_players = 4
+dark_max_players = 3
 
 [timing]
 default_lead_minutes = 30

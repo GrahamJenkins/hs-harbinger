@@ -19,14 +19,19 @@ def build_run_embed(run: Run, config: Config) -> discord.Embed:
 
     embed = discord.Embed(title=title, color=color)
     embed.add_field(
-        name="Organized by",
+        name="Scanner",
         value=f"<@{run.organizer_id}>",
         inline=False,
     )
     ts = int(run.start_time)
     embed.add_field(
-        name="Starts",
+        name="Scan starts",
         value=f"<t:{ts}:R> (<t:{ts}:t>)",
+        inline=False,
+    )
+    embed.add_field(
+        name="",
+        value="Join the scanner's star when it's time.",
         inline=False,
     )
 
@@ -36,7 +41,7 @@ def build_run_embed(run: Run, config: Config) -> discord.Embed:
         name = run.crew_names.get(uid, str(uid))
         crew_lines.append(f"{i}. {name} (<@{uid}>)")
 
-    crew_label = f"Crew ({len(confirmed)}/{config.max_players})"
+    crew_label = f"Crew ({len(confirmed)}/{run._max_players})"
     if run.is_full and run.standby:
         crew_label += " — Full, join as standby"
     embed.add_field(
@@ -198,6 +203,7 @@ class WizardLevelView(discord.ui.View):
 
 class WizardTimeView(discord.ui.View):
     _PRESETS: list[tuple[str, int, discord.ButtonStyle]] = [
+        ("Now", 0, discord.ButtonStyle.success),
         ("5 min", 5, discord.ButtonStyle.secondary),
         ("15 min", 15, discord.ButtonStyle.secondary),
         ("30 min", 30, discord.ButtonStyle.primary),

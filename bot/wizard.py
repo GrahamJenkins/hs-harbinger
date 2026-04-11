@@ -41,6 +41,10 @@ def parse_rs_args(args_str: str, config: Config) -> ParsedArgs:
         return ParsedArgs(level=None, dark=None, minutes=None)
 
     for token in args_str.strip().split():
+        if token.lower() == "now":
+            minutes = 0
+            continue
+
         m = _LEVEL.match(token)
         if m:
             n = int(m.group(2))
@@ -270,7 +274,7 @@ class WizardCog(commands.Cog):
                     if chosen_minutes is not None:
                         min_m = config.min_lead_minutes
                         max_m = config.max_lead_hours * 60
-                        if chosen_minutes < min_m or chosen_minutes > max_m:
+                        if chosen_minutes != 0 and (chosen_minutes < min_m or chosen_minutes > max_m):
                             msg_text = (
                                 f"Time must be between {min_m} minutes and "
                                 f"{config.max_lead_hours} hours. Try again."
@@ -361,7 +365,7 @@ class WizardCog(commands.Cog):
             organizer_id=user.id,
             organizer_name=user.display_name,
             start_time=start_time,
-            max_players=config.max_players,
+            max_players=config.dark_max_players if dark else config.max_players,
         )
 
         embed = build_run_embed(run, config)

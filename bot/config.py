@@ -15,6 +15,7 @@ class Config:
     max_level: int
     dark_min_level: int
     max_players: int
+    dark_max_players: int
     default_lead_minutes: int
     min_lead_minutes: int
     max_lead_hours: int
@@ -52,6 +53,7 @@ def load_config() -> Config:
     max_level = levels.get("max", 12)
     dark_min_level = levels.get("dark_min", 7)
     max_players = levels.get("max_players", 4)
+    dark_max_players = levels.get("dark_max_players", 3)
     default_lead_minutes = timing.get("default_lead_minutes", 30)
     min_lead_minutes = timing.get("min_lead_minutes", 5)
     max_lead_hours = timing.get("max_lead_hours", 8)
@@ -75,6 +77,7 @@ def load_config() -> Config:
         max_level=max_level,
         dark_min_level=dark_min_level,
         max_players=max_players,
+        dark_max_players=dark_max_players,
         default_lead_minutes=default_lead_minutes,
         min_lead_minutes=min_lead_minutes,
         max_lead_hours=max_lead_hours,

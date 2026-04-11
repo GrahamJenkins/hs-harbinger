@@ -50,7 +50,9 @@ class RemindersCog(commands.Cog):
             if now >= run.start_time and 0 not in run.reminded:
                 if channel:
                     await self._delete_previous_reminder(run.id)
-                    msg = await channel.send(f"🚀 {label} — GO TIME! {mentions}")
+                    msg = await channel.send(
+                        f"🚀 {label} — <@{run.organizer_id}> is scanning, join their star! {mentions}"
+                    )
                     self._reminder_messages[run.id] = msg
                 run.reminded.add(0)
 
@@ -60,10 +62,11 @@ class RemindersCog(commands.Cog):
                     embed = build_run_embed(run, self.config)
                     embed.set_field_at(
                         1,
-                        name="Started",
+                        name="Scanned",
                         value=f"<t:{ts}:t>",
                         inline=False,
                     )
+                    embed.remove_field(2)
                     await message.edit(embed=embed, view=None)
                 except Exception:
                     pass
@@ -84,10 +87,11 @@ class RemindersCog(commands.Cog):
                 embed.color = 0x808080
                 embed.set_field_at(
                     1,
-                    name="Started",
+                    name="Scanned",
                     value=f"<t:{int(run.start_time)}:t>",
                     inline=False,
                 )
+                embed.remove_field(2)
                 await message.edit(embed=embed, view=None)
             except Exception:
                 pass
