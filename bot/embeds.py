@@ -151,6 +151,17 @@ class RunView(discord.ui.View):
             )
             return
 
+        if user.id == run.organizer_id and not run.crew:
+            self.run_store.remove(self.run_id)
+            prefix = "DRS" if run.dark else "RS"
+            embed = discord.Embed(
+                title=f"❌ {prefix}{run.level} — Run cancelled",
+                description="Scanner left with no crew.",
+                color=0x808080,
+            )
+            await interaction.response.edit_message(embed=embed, view=None)
+            return
+
         embed = build_run_embed(run, self.config)
         await interaction.response.edit_message(embed=embed, view=self)
 
