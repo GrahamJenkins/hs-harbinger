@@ -29,8 +29,8 @@ class CancelCog(commands.Cog):
 
         if len(runs) == 1:
             run = runs[0]
-            prefix = "DRS" if run.dark else "RS"
-            label = f"{prefix}{run.level}"
+            name = f"Dark Red Star {run.level}" if run.dark else f"Red Star {run.level}"
+            label = name
 
             future: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
 
@@ -107,16 +107,14 @@ class CancelCog(commands.Cog):
 
         if run.message_id is not None:
             try:
-                channel = self.bot.get_channel(self.config.channel_id)
+                channel = self.bot.get_channel(run.channel_id)
                 if channel:
                     message = await channel.fetch_message(run.message_id)
-                    prefix = "DRS" if run.dark else "RS"
-                    embed = discord.Embed(
-                        title=f"❌ {prefix}{run.level} — Run cancelled",
-                        description=f"Cancelled by {organizer}",
-                        color=0x808080,
+                    name = "Dark Red Star" if run.dark else "Red Star"
+                    await message.edit(
+                        content=f"### \u274c {name} {run.level} \u2014 Run cancelled\nCancelled by {organizer}.",
+                        view=None,
                     )
-                    await message.edit(embed=embed, view=None)
             except Exception:
                 pass
 

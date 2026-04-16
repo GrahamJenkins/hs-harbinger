@@ -7,83 +7,69 @@ import discord.ui
 
 from bot.runs import Run, RunStore
 from bot.config import Config
+from bot.roles import _check_guild
 
 
-def build_run_embed(run: Run, config: Config) -> discord.Embed:
-    if run.dark:
-        title = f"💀 Dark Red Star {run.level}"
-        color = 0xCC0000
-    else:
-        title = f"⭐ Red Star {run.level}"
-        color = 0xFFD700
+def build_run_text(run: Run, config: Config, state: str = "upcoming") -> str:
+    """Build run message text.
 
-    embed = discord.Embed(title=title, color=color)
-    embed.add_field(
-        name="Scanner",
-        value=f"<@{run.organizer_id}>",
-        inline=False,
-    )
+    state: "upcoming" (H1), "active" (H2), or "completed" (H3)
+    """
+    name = f"Dark Red Star {run.level}" if run.dark else f"Red Star {run.level}"
+    icon = "\U0001f480" if run.dark else "\u2b50"
     ts = int(run.start_time)
-    embed.add_field(
-        name="Scan starts",
-        value=f"<t:{ts}:R> (<t:{ts}:t>)",
-        inline=False,
-    )
-    embed.add_field(
-        name="",
-        value="Join the scanner's star when it's time.",
-        inline=False,
-    )
+
+    headers = {"upcoming": "#", "active": "##", "completed": "###"}
+    header = headers.get(state, "###")
+
+    lines = [f"{header} {icon} {name}"]
+    lines.append(f"**Scanner:** <@{run.organizer_id}>")
+
+    if state == "upcoming":
+        lines.append(f"**Scan starts:** <t:{ts}:R> (<t:{ts}:t>)")
+        lines.append("*Join the scanner's star when it's time.*")
+    else:
+        lines.append(f"**Scanned:** <t:{ts}:t>")
+
+    lines.append("")
 
     confirmed = run.confirmed
-    crew_lines = []
-    for i, uid in enumerate(confirmed, start=1):
-        name = run.crew_names.get(uid, str(uid))
-        crew_lines.append(f"{i}. {name} (<@{uid}>)")
-
-    crew_label = f"Crew ({len(confirmed)}/{run._max_players})"
+    crew_label = f"**Crew ({len(confirmed)}/{run._max_players})**"
     if run.is_full and run.standby:
-        crew_label += " — Full, join as standby"
-    embed.add_field(
-        name=crew_label,
-        value="\n".join(crew_lines) if crew_lines else "No crew yet",
-        inline=False,
-    )
+        crew_label += " \u2014 Full, join as standby"
+    lines.append(crew_label)
+
+    if confirmed:
+        for i, uid in enumerate(confirmed, start=1):
+            name = run.crew_names.get(uid, str(uid))
+            lines.append(f"{i}. {name} (<@{uid}>)")
+    else:
+        lines.append("No crew yet")
 
     standby = run.standby
     if standby:
-        standby_lines = []
+        lines.append("")
+        lines.append("**Standby**")
         for i, uid in enumerate(standby, start=len(confirmed) + 1):
             name = run.crew_names.get(uid, str(uid))
-            standby_lines.append(f"{i}. {name} (<@{uid}>) (standby)")
-        embed.add_field(
-            name="Standby",
-            value="\n".join(standby_lines),
-            inline=False,
-        )
+            lines.append(f"{i}. {name} (<@{uid}>) (standby)")
 
-    return embed
+    return "\n".join(lines)
 
 
-def build_summary_embed(
+def build_summary_text(
     level: int, dark: bool, minutes: int, start_time: float, config: Config
-) -> discord.Embed:
-    if dark:
-        title = f"💀 Dark Red Star {level} — Preview"
-        color = 0xCC0000
-    else:
-        title = f"⭐ Red Star {level} — Preview"
-        color = 0xFFD700
+) -> str:
+    name = f"Dark Red Star {level}" if dark else f"Red Star {level}"
+    icon = "\U0001f480" if dark else "\u2b50"
+    start = "Now" if minutes == 0 else f"<t:{int(start_time)}:R>"
 
-    embed = discord.Embed(title=title, color=color)
-    embed.add_field(name="Level", value=str(level), inline=True)
-    embed.add_field(name="Type", value="Dark" if dark else "Normal", inline=True)
-    embed.add_field(
-        name="Starts",
-        value="Now" if minutes == 0 else f"<t:{int(start_time)}:R>",
-        inline=False,
-    )
-    return embed
+    lines = [
+        f"### {icon} {name} \u2014 Preview",
+        f"**Type:** {'Dark' if dark else 'Normal'}",
+        f"**Starts:** {start}",
+    ]
+    return "\n".join(lines)
 
 
 class RunView(discord.ui.View):
@@ -109,6 +95,9 @@ class RunView(discord.ui.View):
         leave_button.callback = self._leave_callback
         self.add_item(leave_button)
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return _check_guild(interaction)
+
     async def _join_callback(self, interaction: discord.Interaction) -> None:
         user = interaction.user
         joined = self.run_store.join(self.run_id, user.id, user.display_name)
@@ -125,8 +114,8 @@ class RunView(discord.ui.View):
             )
             return
 
-        embed = build_run_embed(run, self.config)
-        await interaction.response.edit_message(embed=embed, view=self)
+        text = build_run_text(run, self.config)
+        await interaction.response.edit_message(content=text, view=self)
 
         total = len(run.crew)
         if total == self.config.max_players * 2:
@@ -153,17 +142,15 @@ class RunView(discord.ui.View):
 
         if user.id == run.organizer_id and not run.crew:
             self.run_store.remove(self.run_id)
-            prefix = "DRS" if run.dark else "RS"
-            embed = discord.Embed(
-                title=f"❌ {prefix}{run.level} — Run cancelled",
-                description="Scanner left with no crew.",
-                color=0x808080,
+            name = "Dark Red Star" if run.dark else "Red Star"
+            await interaction.response.edit_message(
+                content=f"### \u274c {name} {run.level} \u2014 Run cancelled\nScanner left with no crew.",
+                view=None,
             )
-            await interaction.response.edit_message(embed=embed, view=None)
             return
 
-        embed = build_run_embed(run, self.config)
-        await interaction.response.edit_message(embed=embed, view=self)
+        text = build_run_text(run, self.config)
+        await interaction.response.edit_message(content=text, view=self)
 
 
 class WizardLevelView(discord.ui.View):
@@ -176,15 +163,13 @@ class WizardLevelView(discord.ui.View):
         super().__init__(timeout=120)
         self._callback = callback
 
-        # Group buttons by level: [(label, level, dark, style), ...]
         groups: list[list[tuple[str, int, bool, discord.ButtonStyle]]] = []
         for level in levels:
             group = [(f"RS{level}", level, False, discord.ButtonStyle.primary)]
             if level >= dark_min_level:
-                group.append((f"💀 DRS{level}", level, True, discord.ButtonStyle.danger))
+                group.append((f"\U0001f480 DRS{level}", level, True, discord.ButtonStyle.danger))
             groups.append(group)
 
-        # Assign rows: one level per row if <=5 levels, otherwise pack 2 per row
         one_per_row = len(groups) <= 5
         for i, group in enumerate(groups):
             if one_per_row:
@@ -213,14 +198,16 @@ class WizardLevelView(discord.ui.View):
 
 
 class WizardTimeView(discord.ui.View):
-    _PRESETS: list[tuple[str, int, discord.ButtonStyle]] = [
-        ("Now", 0, discord.ButtonStyle.success),
-        ("5 min", 5, discord.ButtonStyle.secondary),
-        ("15 min", 15, discord.ButtonStyle.secondary),
-        ("30 min", 30, discord.ButtonStyle.primary),
-        ("1 hour", 60, discord.ButtonStyle.secondary),
-        ("2 hours", 120, discord.ButtonStyle.secondary),
-        ("4 hours", 240, discord.ButtonStyle.secondary),
+    _PRESETS: list[tuple[str, int]] = [
+        ("Now", 0),
+        ("5 min", 5),
+        ("10 min", 10),
+        ("15 min", 15),
+        ("20 min", 20),
+        ("30 min", 30),
+        ("1 hour", 60),
+        ("2 hours", 120),
+        ("4 hours", 240),
     ]
 
     def __init__(
@@ -229,10 +216,10 @@ class WizardTimeView(discord.ui.View):
     ) -> None:
         super().__init__(timeout=120)
         self._callback = callback
-        for label, minutes, style in self._PRESETS:
+        for label, minutes in self._PRESETS:
             button = discord.ui.Button(
                 label=label,
-                style=style,
+                style=discord.ButtonStyle.secondary,
                 custom_id=f"wizard_time:{minutes}",
             )
             button.callback = self._make_handler(minutes)

@@ -2,6 +2,4 @@ services:
   harbinger:
     build: .
     env_file: .env
-    volumes:
-      - ./config.toml:/app/config.toml:ro
     restart: unless-stopped

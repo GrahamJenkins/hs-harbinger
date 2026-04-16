@@ -12,7 +12,7 @@ someone has to manually `/rs` every day.
 
 ### Storage: `schedules.toml`
 
-A flat TOML file alongside `config.toml`. Human-editable, version-controllable,
+A flat TOML file for schedule definitions. Human-editable, version-controllable,
 no database required.
 
 ```toml
@@ -43,7 +43,7 @@ label = "Weekend RS7"
 | `dark` | bool | no | Dark variant, default false |
 | `cron` | string | yes | Standard 5-field cron expression (minute hour day month weekday), UTC |
 | `label` | string | no | Human-readable label shown in the run embed |
-| `lead_minutes` | int | no | How far before the scheduled time to post the run. Default: config.default_lead_minutes |
+| `lead_minutes` | int | no | How far before the scheduled time to post the run. Default: 30 |
 
 ### Implementation
 

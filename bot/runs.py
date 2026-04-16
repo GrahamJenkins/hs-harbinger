@@ -16,6 +16,7 @@ class Run:
     created_at: float
     crew: list[int]
     crew_names: dict[int, str]
+    channel_id: int
     message_id: int | None
     reminded: set[int]
     cancelled: bool
@@ -47,6 +48,7 @@ class RunStore:
         organizer_name: str,
         start_time: float,
         max_players: int,
+        channel_id: int,
     ) -> Run:
         run_id = uuid.uuid4().hex[:8]
         run = Run(
@@ -59,6 +61,7 @@ class RunStore:
             created_at=time.time(),
             crew=[organizer_id],
             crew_names={organizer_id: organizer_name},
+            channel_id=channel_id,
             message_id=None,
             reminded=set(),
             cancelled=False,

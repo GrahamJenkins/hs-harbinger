@@ -4,7 +4,6 @@ WORKDIR /app
 
 COPY pyproject.toml .
 COPY bot/ bot/
-COPY config.toml .
 
 RUN pip install --no-cache-dir .
 

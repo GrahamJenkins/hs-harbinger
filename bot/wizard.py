@@ -12,8 +12,8 @@ from discord import app_commands
 from bot.config import Config
 from bot.runs import RunStore
 from bot.embeds import (
-    build_run_embed,
-    build_summary_embed,
+    build_run_text,
+    build_summary_text,
     RunView,
     WizardLevelView,
     WizardTimeView,
@@ -72,18 +72,6 @@ def parse_rs_args(args_str: str, config: Config) -> ParsedArgs:
     return ParsedArgs(level=level, dark=dark, minutes=minutes)
 
 
-def _parse_time_str(s: str) -> int | None:
-    m = _TIME_HM.match(s)
-    if m:
-        hours = int(m.group(1))
-        mins = int(m.group(2)) if m.group(2) else 0
-        return hours * 60 + mins
-    m = _TIME_M.match(s)
-    if m:
-        return int(m.group(1))
-    return None
-
-
 class WizardCog(commands.Cog):
     def __init__(self, bot: commands.Bot, config: Config, run_store: RunStore) -> None:
         self.bot = bot
@@ -106,9 +94,13 @@ class WizardCog(commands.Cog):
             "minutes": parsed.minutes,
         }
 
-        await interaction.response.send_message(
-            "Setting up your Red Star run...", ephemeral=True
-        )
+        try:
+            await interaction.response.send_message(
+                "Starting wizard...", ephemeral=True
+            )
+        except discord.NotFound:
+            self._wizards.pop(user_id, None)
+            return
 
         try:
             await self._run_wizard(interaction)
@@ -131,35 +123,7 @@ class WizardCog(commands.Cog):
         while True:
             # --- Level step ---
             if state["level"] is None:
-                member = interaction.guild.get_member(user_id)
-                if member is None:
-                    try:
-                        member = await interaction.guild.fetch_member(user_id)
-                    except discord.NotFound:
-                        member = None
-
-                user_levels = []
-                if member is not None:
-                    for role in member.roles:
-                        if role.name.startswith(config.role_prefix):
-                            suffix = role.name[len(config.role_prefix):]
-                            if suffix.isdigit():
-                                n = int(suffix)
-                                if config.min_level <= n <= config.max_level:
-                                    user_levels.append(n)
-                user_levels.sort()
-
-                if not user_levels:
-                    await interaction.edit_original_response(
-                        content=(
-                            "You need to opt in to at least one RS level first. "
-                            "See the pinned message in this channel."
-                        ),
-                        view=None,
-                        embed=None,
-                    )
-                    self._wizards.pop(user_id, None)
-                    return
+                all_levels = list(range(config.min_level, config.max_level + 1))
 
                 level_future: asyncio.Future[tuple[discord.Interaction, int, bool]] = (
                     interaction.client.loop.create_future()
@@ -174,7 +138,7 @@ class WizardCog(commands.Cog):
                     if not _fut.done():
                         _fut.set_result((btn_interaction, chosen_level, chosen_dark))
 
-                view = WizardLevelView(user_levels, config.dark_min_level, level_callback)
+                view = WizardLevelView(all_levels, config.dark_min_level, level_callback)
                 await interaction.edit_original_response(
                     content="Select your Red Star run:",
                     view=view,
@@ -193,108 +157,42 @@ class WizardCog(commands.Cog):
 
             # --- Time step ---
             if state["minutes"] is None:
-                while True:
-                    time_future: asyncio.Future[
-                        tuple[discord.Interaction | None, int]
-                    ] = interaction.client.loop.create_future()
+                time_future: asyncio.Future[
+                    tuple[discord.Interaction, int]
+                ] = interaction.client.loop.create_future()
 
-                    async def time_callback(
-                        btn_interaction: discord.Interaction,
-                        chosen_minutes: int,
-                        _fut: asyncio.Future = time_future,
-                    ) -> None:
-                        if not _fut.done():
-                            _fut.set_result((btn_interaction, chosen_minutes))
+                async def time_callback(
+                    btn_interaction: discord.Interaction,
+                    chosen_minutes: int,
+                    _fut: asyncio.Future = time_future,
+                ) -> None:
+                    if not _fut.done():
+                        _fut.set_result((btn_interaction, chosen_minutes))
 
-                    view = WizardTimeView(time_callback)
-                    await interaction.edit_original_response(
-                        content=(
-                            "When does the run start? Pick a preset or type a time "
-                            "like `45m` or `2h30m` in this channel."
-                        ),
-                        view=view,
-                        embed=None,
+                view = WizardTimeView(time_callback)
+                await interaction.edit_original_response(
+                    content="When does the run start?",
+                    view=view,
+                    embed=None,
+                )
+
+                btn_interaction, chosen_minutes = await asyncio.wait_for(
+                    time_future, timeout=120
+                )
+
+                min_m = config.min_lead_minutes
+                max_m = config.max_lead_hours * 60
+                if chosen_minutes != 0 and (chosen_minutes < min_m or chosen_minutes > max_m):
+                    await btn_interaction.response.send_message(
+                        f"Time must be between {min_m} minutes and "
+                        f"{config.max_lead_hours} hours. Use `/rs` to try again.",
+                        ephemeral=True,
                     )
+                    self._wizards.pop(user_id, None)
+                    return
 
-                    def message_check(msg: discord.Message) -> bool:
-                        return (
-                            msg.author.id == user_id
-                            and msg.channel.id == interaction.channel_id
-                        )
-
-                    button_task = asyncio.ensure_future(
-                        asyncio.wait_for(time_future, timeout=120)
-                    )
-                    message_task = asyncio.ensure_future(
-                        asyncio.wait_for(
-                            self.bot.wait_for("message", check=message_check),
-                            timeout=120,
-                        )
-                    )
-
-                    done, pending = await asyncio.wait(
-                        [button_task, message_task],
-                        return_when=asyncio.FIRST_COMPLETED,
-                    )
-                    for t in pending:
-                        t.cancel()
-
-                    chosen_btn_interaction: discord.Interaction | None = None
-                    chosen_minutes: int | None = None
-
-                    completed = done.pop()
-                    if completed.exception():
-                        raise asyncio.TimeoutError()
-
-                    result = completed.result()
-
-                    if completed is button_task:
-                        chosen_btn_interaction, chosen_minutes = result
-                    else:
-                        msg: discord.Message = result
-                        try:
-                            await msg.delete()
-                        except discord.HTTPException:
-                            pass
-                        parsed_time = _parse_time_str(msg.content.strip())
-                        if parsed_time is None:
-                            await interaction.edit_original_response(
-                                content=(
-                                    "Couldn't parse that time. "
-                                    "Try something like `30m` or `1h15m`. "
-                                    "When does the run start?"
-                                ),
-                                view=view,
-                                embed=None,
-                            )
-                            time_future.cancel()
-                            continue
-                        chosen_minutes = parsed_time
-
-                    if chosen_minutes is not None:
-                        min_m = config.min_lead_minutes
-                        max_m = config.max_lead_hours * 60
-                        if chosen_minutes != 0 and (chosen_minutes < min_m or chosen_minutes > max_m):
-                            msg_text = (
-                                f"Time must be between {min_m} minutes and "
-                                f"{config.max_lead_hours} hours. Try again."
-                            )
-                            if chosen_btn_interaction is not None:
-                                await chosen_btn_interaction.response.send_message(
-                                    msg_text, ephemeral=True
-                                )
-                            else:
-                                await interaction.edit_original_response(
-                                    content=msg_text,
-                                    view=None,
-                                    embed=None,
-                                )
-                            continue
-
-                        state["minutes"] = chosen_minutes
-                        if chosen_btn_interaction is not None:
-                            await chosen_btn_interaction.response.defer()
-                        break
+                state["minutes"] = chosen_minutes
+                await btn_interaction.response.defer()
 
             minutes: int = state["minutes"]
 
@@ -313,11 +211,10 @@ class WizardCog(commands.Cog):
                 if not _fut.done():
                     _fut.set_result((btn_interaction, action))
 
-            embed = build_summary_embed(level, dark, minutes, preview_time, config)
+            summary = build_summary_text(level, dark, minutes, preview_time, config)
             view = WizardSummaryView(summary_callback)
             await interaction.edit_original_response(
-                content="Here's your run summary:",
-                embed=embed,
+                content=summary,
                 view=view,
             )
 
@@ -367,18 +264,27 @@ class WizardCog(commands.Cog):
             organizer_name=user.display_name,
             start_time=start_time,
             max_players=config.dark_max_players if dark else config.max_players,
+            channel_id=interaction.channel.id,
         )
 
-        embed = build_run_embed(run, config)
+        text = build_run_text(run, config)
         run_view = RunView(self.run_store, config, run.id)
 
         guild = interaction.guild
         role_name = f"{config.role_prefix}{level}"
         role = discord.utils.get(guild.roles, name=role_name)
-        content = role.mention if role else None
+        if role:
+            text = f"{role.mention}\n{text}"
+
+        reminders_cog = self.bot.cogs.get("RemindersCog")
+        if reminders_cog is not None:
+            await reminders_cog._delete_cta()
 
         channel = interaction.channel
-        message = await channel.send(content=content, embed=embed, view=run_view)
+        message = await channel.send(content=text, view=run_view)
         run.message_id = message.id
 
-        await interaction.delete_original_response()
+        try:
+            await interaction.delete_original_response()
+        except discord.NotFound:
+            pass

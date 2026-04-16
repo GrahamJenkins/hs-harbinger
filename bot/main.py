@@ -16,13 +16,19 @@ config = load_config()
 
 intents = discord.Intents.default()
 intents.members = True
-intents.message_content = True
-intents.reactions = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix=[], intents=intents)
+bot.config = config
 
 run_store = RunStore(max_players=config.max_players)
 _ready = False
+
+
+@bot.tree.interaction_check
+async def global_interaction_check(interaction: discord.Interaction) -> bool:
+    if config.guild_id is None:
+        return True
+    return interaction.guild_id == config.guild_id
 
 
 @bot.event
@@ -46,13 +52,17 @@ async def on_ready():
         await bot.add_cog(CancelCog(bot, config, run_store))
         print("[startup] CancelCog loaded")
 
-        await bot.add_cog(AdminCog(bot, config, roles_cog))
+        await bot.add_cog(AdminCog(bot, config))
         print("[startup] AdminCog loaded")
 
-        guild = discord.Object(id=config.guild_id)
-        bot.tree.copy_global_to(guild=guild)
-        synced = await bot.tree.sync(guild=guild)
-        print(f"[startup] Synced {len(synced)} commands to guild {config.guild_id}: {[c.name for c in synced]}")
+        if config.guild_id is not None:
+            guild = discord.Object(id=config.guild_id)
+            bot.tree.copy_global_to(guild=guild)
+            synced = await bot.tree.sync(guild=guild)
+            print(f"[startup] Synced {len(synced)} commands to guild {config.guild_id}: {[c.name for c in synced]}")
+        else:
+            synced = await bot.tree.sync()
+            print(f"[startup] Synced {len(synced)} commands globally: {[c.name for c in synced]}")
 
         _ready = True
         print(f"Logged in as {bot.user}")
@@ -63,6 +73,8 @@ async def on_ready():
 
 
 def main():
+    import warnings
+    warnings.filterwarnings("ignore", message="coroutine.*was never awaited")
     bot.run(config.token)
 
 
