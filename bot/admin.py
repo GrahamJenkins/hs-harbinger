@@ -5,7 +5,6 @@ from discord.ext import commands
 from discord import app_commands
 
 from bot.config import Config
-from bot.roles import StartRunView
 
 
 class AdminCog(commands.Cog):
@@ -37,20 +36,9 @@ class AdminCog(commands.Cog):
                     )
                     return
 
-        try:
-            await interaction.channel.send(
-                "### Red stars are more fun with friends!\n"
-                "Hit **Start a Run** to schedule one, or tap **Manage Notifications** "
-                "to pick which levels you want to be pinged for.\n"
-                "*Signing up for pings lets your corp mates know when you're playing!*",
-                view=StartRunView(),
-                silent=True,
-            )
-        except discord.Forbidden:
-            await interaction.followup.send(
-                "Missing permissions to post in this channel.", ephemeral=True
-            )
-            return
+        reminders_cog = self.bot.cogs.get("RemindersCog")
+        if reminders_cog is not None:
+            await reminders_cog._post_cta(interaction.channel)
 
         parts = []
         if created:

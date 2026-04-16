@@ -122,7 +122,7 @@ class RemindersCog(commands.Cog):
                 "### Red stars are more fun with friends!\n"
                 "Hit **Start a Run** to schedule one, or tap **Manage Notifications** "
                 "to pick which levels you want to be pinged for.\n"
-                "*Signing up for pings lets your corp mates know when you're playing!*",
+                "*Sign up to get notified when your corp mates start a run!*",
                 view=StartRunView(),
                 silent=True,
             )
